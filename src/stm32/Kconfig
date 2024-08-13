@@ -97,7 +97,6 @@ choice
     config MACH_STM32H503
         bool "STM32H503"
         select MACH_STM32H5
-        select MACH_STM32H503
     config MACH_STM32H723
         bool "STM32H723"
         select MACH_STM32H7
