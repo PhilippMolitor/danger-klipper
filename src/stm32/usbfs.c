@@ -39,15 +39,15 @@
 
 // The stm32g0 and stm32h5 have slightly different register names
 #if CONFIG_MACH_STM32G0 || CONFIG_MACH_STM32H5
-  #if CONFIG_MACH_STM32G0
-    #if CONFIG_MACH_STM32G0B1
-      #define USB_IRQn USB_UCPD1_2_IRQn
-    #endif
+  #if CONFIG_MACH_STM32G0B1
+    #define USB_IRQn USB_UCPD1_2_IRQn
   #endif
+
   #if CONFIG_MACH_STM32H503
     #define USB_IRQn USB_DRD_FS_IRQn
     #define USB_BASE USB_DRD_FS_BASE
   #endif
+
   #define USB USB_DRD_FS
   #define USB_PMAADDR USB_DRD_PMAADDR
   #define USB_EPADDR_FIELD USB_CHEP_ADDR
