@@ -97,6 +97,9 @@ choice
     config MACH_STM32H503
         bool "STM32H503"
         select MACH_STM32H5
+    config MACH_STM32H562
+        bool "STM32H562"
+        select MACH_STM32H5
     config MACH_STM32H723
         bool "STM32H723"
         select MACH_STM32H7
@@ -194,6 +197,7 @@ config MCU
     default "stm32g431xx" if MACH_STM32G431
     default "stm32g474xx" if MACH_STM32G474
     default "stm32h503xx" if MACH_STM32H503
+    default "stm32h562xx" if MACH_STM32H562
     default "stm32h723xx" if MACH_STM32H723
     default "stm32h743xx" if MACH_STM32H743
     default "stm32h750xx" if MACH_STM32H750
@@ -214,7 +218,7 @@ config CLOCK_FREQ
     default 64000000 if MACH_STM32G0
     default 150000000 if MACH_STM32G431
     default 170000000 if MACH_STM32G474
-    default 250000000 if MACH_STM32H503
+    default 240000000 if MACH_STM32H5
     default 400000000 if MACH_STM32H7 # 400Mhz is max Klipper currently supports
     default 80000000 if MACH_STM32L412
     default 64000000 if MACH_N32G45x && STM32_CLOCK_REF_INTERNAL
@@ -231,6 +235,7 @@ config FLASH_SIZE
     default 0x20000 if MACH_STM32G0 || MACH_STM32G431
     default 0x40000 if MACH_STM32G474
     default 0x20000 if MACH_STM32H503
+    default 0x100000 if MACH_STM32H562
     default 0x20000 if MACH_STM32H750
     default 0x200000 if MACH_STM32H743 || MACH_STM32F765
     default 0x20000 if MACH_N32G45x
@@ -261,6 +266,7 @@ config RAM_SIZE
     default 0x9000 if MACH_STM32G07x
     default 0x24000 if MACH_STM32G0Bx
     default 0x8000 if MACH_STM32H503
+    default 0x20000 if MACH_STM32H562
     default 0x20000 if MACH_STM32H7
     default 0x10000 if MACH_N32G45x
 
@@ -286,6 +292,8 @@ config STM32_DFU_ROM_ADDRESS
     default 0x1fff0000 if MACH_STM32F4 || MACH_STM32F7 || MACH_STM32G0 || MACH_STM32G4 || MACH_STM32L4
     default 0x1fffb000 if MACH_AT32F403
     default 0x1ff09800 if MACH_STM32H7
+    default 0x0bf87000 if MACH_STM32H503
+    default 0x0bf97000 if MACH_STM32H562
     default 0
 
 

@@ -26,13 +26,20 @@ usbserial_get_serialid(void)
 void
 chipid_init(void)
 {
+    void *uid = (void *)UID_BASE;
+#if CONFIG_MACH_STM32H5 // stm32h5 requires 32 bit reads
+    uint32_t buf[CHIP_UID_LEN / sizeof(uint32_t)];
+    for (uint8_t i=0; i < CHIP_UID_LEN / sizeof(uint32_t); i++)
+	    buf[i] = ((uint32_t *)UID_BASE)[i];
+    uid = buf;
+#endif
     if (CONFIG_USB_SERIAL_NUMBER_CHIPID)
         usb_fill_serial(&cdc_chipid.desc, ARRAY_SIZE(cdc_chipid.data)
-                        , (void*)UID_BASE);
+                        , uid);
 
     if (CONFIG_CANBUS) {
         if (CONFIG_CAN_UUID_USE_CHIPID) {
-            canserial_set_uuid((void*)UID_BASE, CHIP_UID_LEN);
+            canserial_set_uuid(uid, CHIP_UID_LEN);
         } else {
             canserial_set_uuid((uint8_t *)CONFIG_CAN_UUID_CUSTOM, CHIP_UID_LEN);
         }
