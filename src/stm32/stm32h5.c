@@ -13,6 +13,7 @@
 #include "command.h" // DECL_CONSTANT_STR
 #include "internal.h" // get_pclock_frequency
 #include "sched.h" // sched_main
+#include "stm32h5xx_hal_cortex.h" // MPU defines
 
 
 /****************************************************************
@@ -21,6 +22,9 @@
 
 #define FREQ_PERIPH_DIV 1
 #define FREQ_PERIPH (CONFIG_CLOCK_FREQ / FREQ_PERIPH_DIV)
+
+#define FREQ_HSI_DEFAULT 64000000
+#define FREQ_USB_REQUIRED 48000000
 
 // Map a peripheral address to its enable bits
 struct cline
@@ -105,43 +109,53 @@ clock_setup(void)
         ;
 
     RCC->CFGR2 = 0;
-    RCC->CR &= ~RCC_CR_PLL1ON;
+    RCC->CR &= ~(RCC_CR_PLL1ON | RCC_CR_PLL2ON);
 
-    // pll1 to sysclk, pll2 to usb
-    uint32_t pll_base = 4000000, pll_freq = CONFIG_CLOCK_FREQ * 2, pllcfgr;
-    if (!CONFIG_STM32_CLOCK_REF_INTERNAL) {
-        // Configure 250Mhz PLL from external crystal (HSE)
-        uint32_t div = CONFIG_CLOCK_REF_FREQ / pll_base;
-        RCC->CR |= RCC_CR_HSEON;
-        while (!(RCC->CR & RCC_CR_HSERDY))
-            ;
-        pllcfgr = RCC_PLL1CFGR_PLL1SRC | RCC_PLL1CFGR_PLL1PEN | RCC_PLL1CFGR_PLL1QEN // HSE
-	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz 
-    } else {
-        // Configure 150Mhz PLL from internal 16Mhz oscillator (HSI)
-        uint32_t div = 32000000 / pll_base;
+    uint32_t pll_base = 4000000, pll_freq = CONFIG_CLOCK_FREQ * 2, pllcfgr, div;
+    if (CONFIG_STM32_CLOCK_REF_INTERNAL) {
+        // Configure 500Mhz PLL from internal 32Mhz oscillator (HSI)
+        div = FREQ_HSI_DEFAULT / pll_base;
         pllcfgr = RCC_PLL1CFGR_PLL1SRC_0 | RCC_PLL1CFGR_PLL1PEN // HSI
-	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz 
+	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz
         RCC->CR |= RCC_CR_HSION;
         while (!(RCC->CR & RCC_CR_HSIRDY))
             ;
+    } else {
+        // Configure 500Mhz PLL from external crystal (HSE)
+        div = CONFIG_CLOCK_REF_FREQ / pll_base;
+        RCC->CR |= RCC_CR_HSEON;
+        while (!(RCC->CR & RCC_CR_HSERDY))
+            ;
+        pllcfgr = RCC_PLL1CFGR_PLL1SRC | RCC_PLL1CFGR_PLL1PEN // HSE
+	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz
     }
     RCC->PLL1CFGR = pllcfgr;
     RCC->PLL1DIVR = ((pll_freq/pll_base - 1) << RCC_PLL1DIVR_PLL1N_Pos)
-	            | RCC_PLL1DIVR_PLL1R_0 | (9 << RCC_PLL1DIVR_PLL1Q_Pos) | RCC_PLL1DIVR_PLL1P_0;
+	            | RCC_PLL1DIVR_PLL1R_0 | RCC_PLL1DIVR_PLL1Q_0 | RCC_PLL1DIVR_PLL1P_0;
 
-    // Enable 48Mhz USB clock using clock recovery -- switch to pll later..
     if (CONFIG_USBSERIAL) {
-        RCC->CR |= RCC_CR_HSI48ON;
-        while (!(RCC->CR & RCC_CR_HSI48RDY))
-            ;
-        enable_pclock(CRS_BASE);
-        CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
-	RCC->CCIPR4 |= RCC_CCIPR4_USBSEL_0; // hsi48
+        if (CONFIG_STM32_CLOCK_REF_INTERNAL) { // must use clock recovery
+            RCC->CR |= RCC_CR_HSI48ON;
+            while (!(RCC->CR & RCC_CR_HSI48RDY))
+                ;
+            enable_pclock(CRS_BASE);
+            CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
+	    RCC->CCIPR4 |= RCC_CCIPR4_USBSEL; // hsi48
+	} else { // use pll2
+	    pll_base = 1000000; pll_freq = FREQ_USB_REQUIRED * 2;
+	    div = CONFIG_CLOCK_REF_FREQ / pll_base;
+            RCC->PLL2CFGR = RCC_PLL2CFGR_PLL2SRC | RCC_PLL2CFGR_PLL2QEN // HSE
+	            | RCC_PLL2CFGR_PLL2VCOSEL | (div << RCC_PLL2CFGR_PLL2M_Pos); // 1-2mhz
+            RCC->PLL2DIVR = ((pll_freq/pll_base - 1) << RCC_PLL2DIVR_PLL2N_Pos)
+	            | RCC_PLL2DIVR_PLL2R_0 | RCC_PLL2DIVR_PLL2Q_0 | RCC_PLL2DIVR_PLL2P_0;
+            RCC->CR |= RCC_CR_PLL2ON;
+            while (!(RCC->CR & RCC_CR_PLL2RDY))
+                ;
+	    RCC->CCIPR4 |= RCC_CCIPR4_USBSEL_1; // pll2q
+	}
     }
 
     RCC->CR |= RCC_CR_PLL1ON;
-    // Wait for PLL lock
     while (!(RCC->CR & RCC_CR_PLL1RDY))
         ;
 
@@ -160,55 +174,53 @@ bootloader_request(void)
 }
 
 void configure_mpu(void) {
-  __DMB(); /* Force any outstanding transfers to complete before disabling MPU */
+    __DMB(); /* Force any outstanding transfers to complete before disabling MPU */
 
-  /* Disable fault exceptions */
-  SCB->SHCSR &= ~SCB_SHCSR_MEMFAULTENA_Msk;
+    /* Disable fault exceptions */
+    SCB->SHCSR &= ~SCB_SHCSR_MEMFAULTENA_Msk;
 
-  /* Disable the MPU */
-  MPU->CTRL  &= ~MPU_CTRL_ENABLE_Msk;
+    /* Disable the MPU */
+    MPU->CTRL  &= ~MPU_CTRL_ENABLE_Msk;
 
-  /* Follow ARM recommendation with */
-  /* Data Synchronization and Instruction Synchronization Barriers to ensure MPU configuration */
-  __DSB(); /* Ensure that the subsequent instruction is executed only after the write to memory */
-  __ISB(); /* Flush and refill pipeline with updated MPU configuration settings */
+    /* Follow ARM recommendation with */
+    /* Data Synchronization and Instruction Synchronization Barriers to ensure MPU configuration */
+    __DSB(); /* Ensure that the subsequent instruction is executed only after the write to memory */
+    __ISB(); /* Flush and refill pipeline with updated MPU configuration settings */
 
     __DMB();
-  /* Set the Region number */
-  MPU->RNR = 0;
 
-  /* Disable the Region */
-  MPU->RLAR &= ~MPU_RLAR_EN_Msk;
+    /* Set the Region number */
+    MPU->RNR = MPU_REGION_NUMBER0;
 
-  // TODO: convert these to defined constants
-  MPU->RBAR = (((uint32_t)UID_BASE & 0xFFFFFFE0UL)  |
-                (0           << MPU_RBAR_SH_Pos)  |
-                (3      << MPU_RBAR_AP_Pos)  |
-                (1           << MPU_RBAR_XN_Pos));
+    /* Disable the Region */
+    MPU->RLAR &= ~MPU_RLAR_EN_Msk;
 
-  MPU->RLAR = (((uint32_t)0x08ffffff                    & 0xFFFFFFE0UL) |
-                (0       << MPU_RLAR_AttrIndx_Pos) |
-                (1                << MPU_RLAR_EN_Pos));
+    MPU->RBAR = (((uint32_t)UID_BASE & 0xFFFFFFE0UL) |
+                (MPU_ACCESS_OUTER_SHAREABLE << MPU_RBAR_SH_Pos) |
+                (MPU_REGION_ALL_RO << MPU_RBAR_AP_Pos) |
+                (MPU_INSTRUCTION_ACCESS_DISABLE << MPU_RBAR_XN_Pos));
+
+    MPU->RLAR = (((uint32_t)0x08ffffff & 0xFFFFFFE0UL) |
+                (MPU_ATTRIBUTES_NUMBER0 << MPU_RLAR_AttrIndx_Pos) |
+                (MPU_REGION_ENABLE << MPU_RLAR_EN_Pos));
 
     __DMB(); /* Data Memory Barrier operation to force any outstanding writes to memory before enabling the MPU */
 
-
-    MPU->MAIR0 = ARM_MPU_ATTR_DEVICE_nGnRnE | 0x4 | 0x40
-                            | 0x0 | 0x0;
+    MPU->MAIR0 = ARM_MPU_ATTR_DEVICE_nGnRnE
+	  | INNER_OUTER(MPU_NOT_CACHEABLE | MPU_TRANSIENT | MPU_NO_ALLOCATE);
 
     __DMB();
 
+    /* Enable the MPU */
+    MPU->CTRL |= MPU_CTRL_ENABLE_Msk | MPU_PRIVILEGED_DEFAULT;
 
-  /* Enable the MPU */
-  MPU->CTRL |= MPU_CTRL_ENABLE_Msk | 0x4;
+    /* Enable fault exceptions */
+    SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
 
-  /* Enable fault exceptions */
-  SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
-
-  /* Follow ARM recommendation with */
-  /* Data Synchronization and Instruction Synchronization Barriers to ensure MPU configuration */
-  __DSB(); /* Ensure that the subsequent instruction is executed only after the write to memory */
-  __ISB(); /* Flush and refill pipeline with updated MPU configuration settings */
+    /* Follow ARM recommendation with */
+    /* Data Synchronization and Instruction Synchronization Barriers to ensure MPU configuration */
+    __DSB(); /* Ensure that the subsequent instruction is executed only after the write to memory */
+    __ISB(); /* Flush and refill pipeline with updated MPU configuration settings */
 }
 
 
