@@ -2034,7 +2034,7 @@
           <li class="md-nav__item">
   <a href="#menu" class="md-nav__link">
     <span class="md-ellipsis">
-      [menu]
+      ⚠️ [menu]
     </span>
   </a>
   
@@ -4876,7 +4876,7 @@
           <li class="md-nav__item">
   <a href="#menu" class="md-nav__link">
     <span class="md-ellipsis">
-      [menu]
+      ⚠️ [menu]
     </span>
   </a>
   
@@ -5243,8 +5243,16 @@ pins such as "extra_mcu:ar9" may then be used elsewhere in the config
 #   This allows to set extra flush time (in seconds). Under certain conditions,
 #   a low value will result in an error if message is not get flushed, a high value
 #   (0.250) will result in homing/probing latency. The default is 0.250
+#homing_start_delay: 0.001
+#   How long to dwell before beginning a drip move for homing
+#endstop_sample_time: 0.000015
+#   How often the MCU should sample the endstop state
+#endstop_sample_count: 4
+#   How many times we should check the endstop state when homing
+#   Unless your endstop is noisy and unreliable, you should be able to lower this to 1
 
-# Logging options
+
+# Logging options:
 
 #minimal_logging: False
 #   Set all log parameters log options to False. The default is False.
@@ -9664,7 +9672,7 @@ thus they do not support the "menu" options or button configuration.</p>
 # See the &quot;display&quot; section for available parameters.
 </code></pre></div>
 
-<h3 id="menu">[menu]<a class="headerlink" href="#menu" title="Permanent link">&para;</a></h3>
+<h3 id="menu">⚠️ [menu]<a class="headerlink" href="#menu" title="Permanent link">&para;</a></h3>
 <p>Customizable lcd display menus.</p>
 <p>A <a href="https://github.com/DangerKlippers/danger-klipperblob/master/klippy/extras/display/menu.cfg">default set of menus</a> are
 automatically created. One can replace or extend the menu by
@@ -9681,15 +9689,21 @@ information on menu attributes available during template rendering.</p>
 #[menu some_name]
 #type:
 #   One of command, input, list, text:
-#       command - basic menu element with various script triggers
-#       input   - same like &#39;command&#39; but has value changing capabilities.
-#                 Press will start/stop edit mode.
-#       list    - it allows for menu items to be grouped together in a
-#                 scrollable list.  Add to the list by creating menu
-#                 configurations using &quot;some_list&quot; as a prefix - for
-#                 example: [menu some_list some_item_in_the_list]
-#       vsdlist - same as &#39;list&#39; but will append files from virtual sdcard
-#                 (will be removed in the future)
+#       command      - basic menu element with various script triggers
+#       input        - same like &#39;command&#39; but has value changing capabilities.
+#                      Press will start/stop edit mode.
+#       list         - it allows for menu items to be grouped together in a
+#                      scrollable list.  Add to the list by creating menu
+#                      configurations using &quot;some_list&quot; as a prefix - for
+#                      example: [menu some_list some_item_in_the_list]
+#       vsdlist      - same as &#39;list&#39; but will append files from virtual sdcard
+#                      (deprecated, will be removed in the future)
+#    ⚠️ file_browser - Extended SD Card browser, supporting directories and
+#                      sorting. (replaces vsdlist)
+#    ⚠️ dialog       - Menu Dialogs, a list of inputs with a final choice to
+#                      confirm or cancel. Used for more complex scenarios like
+#                      PID/MPC calibration where you may want to set multiple
+#                      values for a single command
 #name:
 #   Name of menu item - evaluated as a template.
 #enable:
@@ -9701,6 +9715,14 @@ information on menu attributes available during template rendering.</p>
 #[menu some_list]
 #type: list
 #name:
+#enable:
+#   See above for a description of these parameters.
+
+#[menu sdcard]
+#type: file_browser
+#name:
+#sort_by:
+#   `last_modified` (default) or `name`
 #enable:
 #   See above for a description of these parameters.
 
@@ -9737,6 +9759,22 @@ information on menu attributes available during template rendering.</p>
 #   Script to run on button click, long click or value change.
 #   Evaluated as a template. The button click will trigger the edit
 #   mode start or end.
+
+#[menu neopixel]
+#type: dialog
+#name:
+#enable:
+#   See above for a description of these parameters.
+#title:
+#   An optional title to display at the top of the dialog. `name` will
+#   used if not set
+#confirm_text:
+#cancel_text
+#   Templates for the confirmation and cancel options
+#gcode:
+#   G-Code to run on confirmation. The dialog will be closed on
+#   confirmation. `{menu.exit()}` may be used to close the menu
+#   instead.
 </code></pre></div>
 
 <h2 id="filament-sensors">Filament sensors<a class="headerlink" href="#filament-sensors" title="Permanent link">&para;</a></h2>
@@ -9883,10 +9921,14 @@ adc2:
 #   Use the current diameter instead of the nominal diameter while
 #   the measurement delay has not run through.
 #pause_on_runout:
+#immediate_runout_gcode:
 #runout_gcode:
 #insert_gcode:
 #event_delay:
 #pause_delay:
+#smart:
+#always_fire_events:
+#check_on_print_start:
 #   See the &quot;filament_switch_sensor&quot; section for a description of the
 #   above parameters.
 </code></pre></div>
