@@ -4,7 +4,11 @@
 # Copyright (C) 2017  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import sys, re, collections, ast, itertools
+import ast
+import collections
+import itertools
+import re
+import sys
 
 
 def format_comment(line_num, line):
@@ -499,7 +503,7 @@ class APIStream:
 
 
 stats_r = re.compile(r"^Stats " + time_s + ": ")
-mcu_r = re.compile(r"MCU '(?P<mcu>[^']+)' (is_)?shutdown: (?P<reason>.*)$")
+mcu_r = re.compile(r"MCU '(?P<mcu>[^']+)' (is_)?shutdown:(?P<reason>.*)$")
 stepper_r = re.compile(
     r"^Dumping stepper '(?P<name>[^']*)' \((?P<mcu>[^)]+)\) "
     + count_s

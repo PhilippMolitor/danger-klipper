@@ -131,9 +131,10 @@ Kalico supports many standard 3d printer features:
   speed can be monitored on fans that have a tachometer.
 
 * Support for run-time configuration of TMC2130, TMC2208/TMC2224,
-  TMC2209, TMC2240, TMC2660, TMC5160 and TMC2160 stepper motor drivers.
-  There is also support for current control of traditional stepper drivers
-  via AD5206, DAC084S085, MCP4451, MCP4728, MCP4018, and PWM pins.
+  TMC2209, TMC2240, TMC2660, TMC5160, TMC2160 and TMC5262 stepper motor
+  drivers. There is also support for current control of traditional
+  stepper drivers via AD5206, DAC084S085, MCP4451, MCP4728, MCP4018, and
+  PWM pins.
 
 * Support for common LCD displays attached directly to the printer. A
   default menu is also available. The contents of the display and menu
@@ -187,12 +188,13 @@ represent total number of steps per second on the micro-controller.
 | SAM4E8E                         | 2500K             | 1674K             |
 | SAMD51                          | 3077K             | 1885K             |
 | AR100                           | 3529K             | 2507K             |
+| STM32G431                       | 3617K             | 2452K             |
 | STM32F407                       | 3652K             | 2459K             |
 | STM32F446                       | 3913K             | 2634K             |
 | RP2040                          | 4000K             | 2571K             |
 | RP2350                          | 4167K             | 2663K             |
 | SAME70                          | 6667K             | 4737K             |
-| STM32H743                       | 9091K             | 6061K             |
+| STM32H723                       | 7429K             | 8619K             |
 
 If unsure of the micro-controller on a particular board, find the
 appropriate [config file](../config/), and look for the

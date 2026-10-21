@@ -10,7 +10,8 @@
 #               2016/06/DS-000189-ICM-20948-v1.3.pdf
 
 import logging
-from . import bus, adxl345, bulk_sensor
+
+from . import adxl345, bulk_sensor, bus
 
 ICM20948_ADDR = 0x68
 
@@ -137,7 +138,7 @@ class ICM20948:
         dev_id = self.read_reg(REG_DEVID)
         if dev_id not in ICM_DEV_IDS.keys():
             raise self.printer.command_error(
-                "Invalid mpu id (got %x).\n"
+                "Invalid icm20948 id (got %x).\n"
                 "This is generally indicative of connection problems\n"
                 "(e.g. faulty wiring) or a faulty chip." % (dev_id)
             )

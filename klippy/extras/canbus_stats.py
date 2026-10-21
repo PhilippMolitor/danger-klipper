@@ -5,6 +5,8 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 
+from klippy import serialhdl
+
 
 class PrinterCANBusStats:
     def __init__(self, config):
@@ -69,9 +71,28 @@ class PrinterCANBusStats:
         prev_rx = self.status["rx_error"]
         prev_tx = self.status["tx_error"]
         prev_retries = self.status["tx_retries"]
+
+        # skip querying disconnected MCU and maintain previous status
+        if (
+            self.mcu.non_critical_disconnected
+            or self.get_canbus_status_cmd is None
+        ):
+            self.status = {
+                "rx_error": prev_rx,
+                "tx_error": prev_tx,
+                "tx_retries": prev_retries,
+                "bus_state": "disconnected",
+            }
+            return self.reactor.monotonic() + 1.0
+
         if prev_rx is None:
             prev_rx = prev_tx = prev_retries = 0
-        params = self.get_canbus_status_cmd.send()
+        try:
+            params = self.get_canbus_status_cmd.send()
+        except (serialhdl.error, self.printer.command_error):
+            # The connection can drop while a query is in flight (e.g. a
+            # non-critical mcu disconnecting) - keep stats and retry later
+            return self.reactor.monotonic() + 1.0
         rx = prev_rx + ((params["rx_error"] - prev_rx) & 0xFFFFFFFF)
         tx = prev_tx + ((params["tx_error"] - prev_tx) & 0xFFFFFFFF)
         retries = prev_retries + (

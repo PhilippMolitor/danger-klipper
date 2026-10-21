@@ -5,8 +5,10 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 
 import math
-from . import manual_probe, bed_mesh
 
+from klippy.extras.probe import ProbeList
+
+from . import bed_mesh, manual_probe
 
 DEFAULT_SAMPLE_COUNT = 3
 DEFAULT_SPEED = 50.0
@@ -51,6 +53,26 @@ class AxisTwistCompensation:
         self.zy_compensations = config.getlists(
             "zy_compensations", default=[], parser=float
         )
+
+        # validate that compensation values have required start/end points
+        if self.z_compensations:
+            if (
+                self.compensation_start_x is None
+                or self.compensation_end_x is None
+            ):
+                raise config.error(
+                    "z_compensations requires compensation_start_x and "
+                    "compensation_end_x to be set"
+                )
+        if self.zy_compensations:
+            if (
+                self.compensation_start_y is None
+                or self.compensation_end_y is None
+            ):
+                raise config.error(
+                    "zy_compensations requires compensation_start_y and "
+                    "compensation_end_y to be set"
+                )
 
         # setup calibrater
         self.calibrater = Calibrater(self, config)
@@ -120,9 +142,6 @@ class Calibrater:
             None,
             None,
         )
-        self.printer.register_event_handler(
-            "klippy:connect", self._handle_connect
-        )
         self.speed = compensation.speed
         self.horizontal_move_z = compensation.horizontal_move_z
         self.x_start_point = (
@@ -149,15 +168,6 @@ class Calibrater:
         # register gcode handlers
         self._register_gcode_handlers()
 
-    def _handle_connect(self):
-        self.probe = self.printer.lookup_object("probe", None)
-        if self.probe is None:
-            raise self.printer.config_error(
-                "AXIS_TWIST_COMPENSATION requires [probe] to be defined"
-            )
-        self.lift_speed = self.probe.get_lift_speed()
-        self.probe_x_offset, self.probe_y_offset, _ = self.probe.get_offsets()
-
     def _register_gcode_handlers(self):
         # register gcode handlers
         self.gcode = self.printer.lookup_object("gcode")
@@ -174,6 +184,10 @@ class Calibrater:
     """
 
     def cmd_AXIS_TWIST_COMPENSATION_CALIBRATE(self, gcmd):
+        self.probe = ProbeList.get_list(self.printer).get_command_probe(gcmd)
+        self.lift_speed = self.probe.get_lift_speed()
+        self.probe_x_offset, self.probe_y_offset, _ = self.probe.get_offsets()
+
         self.gcmd = gcmd
         sample_count = gcmd.get_int("SAMPLE_COUNT", DEFAULT_SAMPLE_COUNT)
         axis = gcmd.get("AXIS", "X")

@@ -5,6 +5,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math
+
 from . import tmc, tmc2130, tmc_uart
 
 TMC_FREQUENCY = 12500000.0
@@ -69,6 +70,7 @@ ReadRegisters = [
     "THIGH",
     "ADC_VSUPPLY_AIN",
     "ADC_TEMP",
+    "OTW_OV_VTH",
     "MSCNT",
     "MSCURACT",
     "CHOPCONF",
@@ -255,6 +257,10 @@ FieldFormatters.update(
         "adc_temp": (lambda v: "0x%04x(%.1fC)" % (v, ((v - 2038) / 7.7))),
         "adc_vsupply": (lambda v: "0x%04x(%.3fV)" % (v, v * 0.009732)),
         "adc_ain": (lambda v: "0x%04x(%.3fmV)" % (v, v * 0.3052)),
+        "overvoltage_vth": (lambda v: "0x%04x(%.3fV)" % (v, v * 0.009732)),
+        "overtempprewarning_vth": (
+            lambda v: "0x%04x(%.1fC)" % (v, ((v - 2038) / 7.7))
+        ),
     }
 )
 
@@ -382,6 +388,10 @@ class TMC2240CurrentHelper(tmc.BaseTMCCurrentHelper):
 ######################################################################
 
 
+def _adc_to_celsius(adc_value):
+    return (adc_value - 2038) / 7.7
+
+
 class TMC2240:
     def __init__(self, config):
         # Setup mcu communication
@@ -400,7 +410,9 @@ class TMC2240:
         tmc.TMCVirtualPinHelper(config, self.mcu_tmc)
         # Register commands
         current_helper = TMC2240CurrentHelper(config, self.mcu_tmc)
-        cmdhelper = tmc.TMCCommandHelper(config, self.mcu_tmc, current_helper)
+        cmdhelper = tmc.TMCCommandHelper(
+            config, self.mcu_tmc, current_helper, _adc_to_celsius
+        )
         cmdhelper.setup_register_dump(ReadRegisters)
         self.get_phase_offset = cmdhelper.get_phase_offset
         self.get_status = cmdhelper.get_status
@@ -450,6 +462,7 @@ class TMC2240:
         #   TPOWERDOWN
         set_config_field(config, "tpowerdown", 10)
         #   SG4_THRS
+        set_config_field(config, "sg4_thrs", 0)
         set_config_field(config, "sg4_angle_offset", 1)
         #   DRV_CONF
         set_config_field(config, "slope_control", 0)

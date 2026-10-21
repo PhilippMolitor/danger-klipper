@@ -62,8 +62,8 @@ This can be useful when tuning high speed machines to know what the limits of yo
 
 Depending on the specific settings, nonlinear PA can request higher speeds and almost always requests higher accelerations than standard PA, so you can use this in combination with testing to ensure new settings combinations you are trying don't have issues.
 
-Note that there are two different nonlinear functions: reciprocal and tanh.
-They both can have similar results, but reciprocal provides better independence between low and high speed PA so we recommend you use that for ease of tuning.
+Note that there are two different nonlinear functions: recipr and tanh.
+They both can have similar results, but recipr provides better independence between low and high speed PA so we recommend you use that for ease of tuning.
 
 ## Setup
 
@@ -302,10 +302,10 @@ Viewed with top lighting, it's easy to see how much less of a bulge there is on 
 
 The sidelit X face shows a much flatter surface around the slots in the nonlinear test cube, while the linear test cubes show shadowed areas to the right of the slots.
 
-When toplit, the 0.4 and 0.3 linear PA show a large bulge slightly late after each slot that casts a shadow below.
-The 0.25 linear PA shows a small indentation after the top of each slot possibly from the transition from a very slow bridge speed to wall speed.
+When toplit, the 0.04 and 0.03 linear PA show a large bulge slightly late after each slot that casts a shadow below.
+The 0.025 linear PA shows a small indentation after the top of each slot possibly from the transition from a very slow bridge speed to wall speed.
 Nonlinear PA exhibits similar effects but to a much smaller extent.
 
-The top view illustrates that 0.30 is already too much linear PA to maintain full extrusion around corners.
-0.40 linear has large gaps between the perimeter lines, and it's starting to have voids at the ends of solid infill lines.
-Both nonlinear and 0.25 linear fully extrude around corners.
+The top view illustrates that 0.03 is already too much linear PA to maintain full extrusion around corners.
+0.04 linear has large gaps between the perimeter lines, and it's starting to have voids at the ends of solid infill lines.
+Both nonlinear and 0.025 linear fully extrude around corners.

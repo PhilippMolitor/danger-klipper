@@ -3,10 +3,10 @@
 # Copyright (C) 2019  Eric Callahan <arksine.code@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import logging
 import os
 import shlex
 import subprocess
-import logging
 
 
 class ShellCommand:
@@ -16,6 +16,7 @@ class ShellCommand:
         self.gcode = self.printer.lookup_object("gcode")
         cmd = config.get("command")
         cmd = os.path.expanduser(cmd)
+        cmd = os.path.expandvars(cmd)
         self.command = shlex.split(cmd)
         self.timeout = config.getfloat("timeout", 2.0, above=0.0)
         self.verbose = config.getboolean("verbose", True)
@@ -52,7 +53,10 @@ class ShellCommand:
 
     def cmd_RUN_SHELL_COMMAND(self, params):
         gcode_params = params.get("PARAMS", "")
-        gcode_params = shlex.split(gcode_params)
+        gcode_params = [
+            os.path.expandvars(os.path.expanduser(p))
+            for p in shlex.split(gcode_params)
+        ]
         reactor = self.printer.get_reactor()
         try:
             proc = subprocess.Popen(

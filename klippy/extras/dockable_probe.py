@@ -7,8 +7,9 @@
 # Copyright (C) 2023       Alan Smith <alan@airpost.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+from math import acos, atan2, cos, fabs, floor, hypot, pi, sin, sqrt
+
 from . import probe
-from math import atan2, acos, cos, floor, fabs, hypot, pi, sin, sqrt
 
 PROBE_VERIFY_DELAY = 0.1
 
@@ -185,6 +186,9 @@ class DockableProbe:
         )
         self.sample_retract_dist = config.getfloat(
             "sample_retract_dist", 2.0, above=0.0
+        )
+        self.detach_dockable_before_z_home = config.getboolean(
+            "detach_dockable_before_z_home", False
         )
 
         # Positions (approach, detach, etc)
@@ -848,11 +852,11 @@ class DockableProbe:
 
         tpos = self.toolhead.get_position()
         self.toolhead.set_position(
-            [tpos[0], tpos[1], 0.0, tpos[3]], homing_axes=[2]
+            [tpos[0], tpos[1], 0.0, tpos[3]], homing_axes="z"
         )
         self.toolhead.manual_move([None, None, self.z_hop], self.lift_speed)
         kin = self.toolhead.get_kinematics()
-        kin.clear_homing_state([2])
+        kin.clear_homing_state("z")
         self.last_z = self.toolhead.get_position()[2]
 
     #######################################################################
@@ -934,12 +938,12 @@ class DockableProbe:
     def get_position_endstop(self):
         return self.position_endstop
 
-    def probing_move(self, pos, speed):
+    def probing_move(self, pos, speed, gcmd):
         phoming = self.printer.lookup_object("homing")
         return phoming.probing_move(self, pos, speed)
 
 
 def load_config(config):
     msp = DockableProbe(config)
-    config.get_printer().add_object("probe", probe.PrinterProbe(config, msp))
+    probe.PrinterProbe(config, msp)
     return msp

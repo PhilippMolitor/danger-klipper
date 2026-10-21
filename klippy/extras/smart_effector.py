@@ -88,7 +88,7 @@ class SmartEffectorEndstopWrapper:
             desc=self.cmd_SET_SMART_EFFECTOR_help,
         )
 
-    def probing_move(self, pos, speed):
+    def probing_move(self, pos, speed, gcmd):
         phoming = self.printer.lookup_object("homing")
         return phoming.probing_move(self, pos, speed)
 
@@ -177,7 +177,5 @@ class SmartEffectorEndstopWrapper:
 
 def load_config(config):
     smart_effector = SmartEffectorEndstopWrapper(config)
-    config.get_printer().add_object(
-        "probe", probe.PrinterProbe(config, smart_effector)
-    )
+    probe.PrinterProbe(config, smart_effector)
     return smart_effector

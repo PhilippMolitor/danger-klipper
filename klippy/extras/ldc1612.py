@@ -4,7 +4,10 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
-from . import bus, bulk_sensor
+
+from klippy.printer import SubsystemComponentCollection
+
+from . import bulk_sensor, bus
 
 MIN_MSG_TIME = 0.100
 
@@ -12,7 +15,7 @@ BATCH_UPDATES = 0.100
 
 LDC1612_ADDR = 0x2A
 
-LDC1612_FREQ = 12000000
+DEFAULT_LDC1612_FREQ = 12000000
 SETTLETIME = 0.005
 DRIVECUR = 15
 DEGLITCH = 0x05  # 10 Mhz
@@ -30,6 +33,12 @@ REG_MUX_CONFIG = 0x1B
 REG_DRIVE_CURRENT0 = 0x1E
 REG_MANUFACTURER_ID = 0x7E
 REG_DEVICE_ID = 0x7F
+
+ERR2OUT_UR = 0x10  # Under-range
+ERR2OUT_OR = 0x08  # Over-range
+ERR2OUT_WD = 0x04  # Watchdog
+ERR2OUT_AH = 0x02  # Amplitude high
+ERR2OUT_AL = 0x01  # Amplitude low
 
 
 # Tool for determining appropriate DRIVE_CURRENT register
@@ -99,6 +108,22 @@ class LDC1612:
         self.oid = oid = mcu.create_oid()
         self.query_ldc1612_cmd = None
         self.ldc1612_setup_home_cmd = self.query_ldc1612_home_state_cmd = None
+        self.clock_freq = config.getint(
+            "frequency", DEFAULT_LDC1612_FREQ, 2000000, 40000000
+        )
+        amplitude_error_options = {
+            "both": ERR2OUT_AH | ERR2OUT_AL,
+            "low": ERR2OUT_AL,
+            "high": ERR2OUT_AH,
+            "none": 0,
+        }
+        self.error_mask_amplitude = config.getchoice(
+            "amplitude_errors", amplitude_error_options, "both"
+        )
+        # Coil frequency divider, assume 12MHz is BTT Eddy
+        # BTT Eddy's coil frequency is > 1/4 of reference clock
+        self.sensor_div = 1 if self.clock_freq != DEFAULT_LDC1612_FREQ else 2
+        self.freq_conv = float(self.clock_freq * self.sensor_div) / (1 << 28)
         if config.get("intb_pin", None) is not None:
             ppins = config.get_printer().lookup_object("pins")
             pin_params = ppins.lookup_pin(config.get("intb_pin"))
@@ -170,12 +195,15 @@ class LDC1612:
     def add_client(self, cb):
         self.batch_bulk.add_client(cb)
 
+    def get_sample_rate(self):
+        return self.data_rate
+
     # Homing
     def setup_home(
         self, print_time, trigger_freq, trsync_oid, hit_reason, err_reason
     ):
         clock = self.mcu.print_time_to_clock(print_time)
-        tfreq = int(trigger_freq * (1 << 28) / float(LDC1612_FREQ) + 0.5)
+        tfreq = int(trigger_freq / self.freq_conv + 0.5)
         self.ldc1612_setup_home_cmd.send(
             [self.oid, clock, tfreq, trsync_oid, hit_reason, err_reason]
         )
@@ -190,14 +218,16 @@ class LDC1612:
 
     # Measurement decoding
     def _convert_samples(self, samples):
-        freq_conv = float(LDC1612_FREQ) / (1 << 28)
+        freq_conv = self.freq_conv
         count = 0
         for ptime, val in samples:
             mv = val & 0x0FFFFFFF
             if mv != val:
                 self.last_error_count += 1
+                continue
             samples[count] = (round(ptime, 6), round(freq_conv * mv, 3), 999.9)
             count += 1
+        del samples[count:]
 
     # Start, stop, and process message batches
     def _start_measurements(self):
@@ -213,14 +243,17 @@ class LDC1612:
                 % (manuf_id, dev_id, LDC1612_MANUF_ID, LDC1612_DEV_ID)
             )
         # Setup chip in requested query rate
-        rcount0 = LDC1612_FREQ / (16.0 * (self.data_rate - 4))
+        rcount0 = self.clock_freq / (16.0 * self.data_rate)
         self.set_reg(REG_RCOUNT0, int(rcount0 + 0.5))
         self.set_reg(REG_OFFSET0, 0)
         self.set_reg(
-            REG_SETTLECOUNT0, int(SETTLETIME * LDC1612_FREQ / 16.0 + 0.5)
+            REG_SETTLECOUNT0, int(SETTLETIME * self.clock_freq / 16.0 + 0.5)
         )
-        self.set_reg(REG_CLOCK_DIVIDERS0, (1 << 12) | 1)
-        self.set_reg(REG_ERROR_CONFIG, (0x1F << 11) | 1)
+        self.set_reg(REG_CLOCK_DIVIDERS0, (self.sensor_div << 12) | 1)
+        error_mask = (
+            ERR2OUT_UR | ERR2OUT_OR | ERR2OUT_WD | self.error_mask_amplitude
+        )
+        self.set_reg(REG_ERROR_CONFIG, (error_mask << 11) | 1)
         self.set_reg(REG_MUX_CONFIG, 0x0208 | DEGLITCH)
         self.set_reg(REG_CONFIG, 0x001 | (1 << 12) | (1 << 10) | (1 << 9))
         self.set_reg(REG_DRIVE_CURRENT0, self.dccal.get_drive_current() << 11)
@@ -250,3 +283,7 @@ class LDC1612:
             "errors": self.last_error_count,
             "overflows": self.ffreader.get_last_overflows(),
         }
+
+
+def register_components(subsystem: SubsystemComponentCollection):
+    subsystem.register_component("eddy_current_sensors", "ldc1612", LDC1612)

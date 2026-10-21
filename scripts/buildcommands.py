@@ -4,8 +4,18 @@
 # Copyright (C) 2016-2024  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
-import sys, os, subprocess, optparse, logging, pathlib, shlex, socket, time
-import traceback, json, zlib
+import json
+import logging
+import optparse
+import os
+import pathlib
+import shlex
+import socket
+import subprocess
+import sys
+import time
+import traceback
+import zlib
 
 # Directly import msgproto without needing the full klippy environment
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "klippy"))
@@ -583,11 +593,23 @@ def git_version():
     return ver
 
 
+# Obtain version info from "klippy/.version" file
+def file_version():
+    if not os.path.exists("klippy/.version"):
+        logging.debug("No 'klippy/.version' file/directory found")
+        return ""
+    ver = check_output("cat klippy/.version").strip()
+    logging.debug("Got klippy version: %s" % (repr(ver),))
+    return ver
+
+
 def build_version(extra, cleanbuild):
     version = git_version()
     if not version:
         cleanbuild = False
-        version = "?"
+        version = file_version()
+        if not version:
+            version = "?"
     elif "dirty" in version:
         cleanbuild = False
     if not cleanbuild:
@@ -653,6 +675,23 @@ class HandleVersions:
 
 
 Handlers.append(HandleVersions())
+
+
+class HandleKConfig:
+    def __init__(self):
+        self.ctr_dispatch = {}
+        self.defconfig = ""
+
+    def update_data_dictionary(self, data):
+        data["kconfig"] = self.defconfig
+
+    def generate_code(self, options):
+        with open(options.kconfig) as f:
+            self.defconfig = f.read()
+        return ""
+
+
+Handlers.append(HandleKConfig())
 
 
 ######################################################################
@@ -721,6 +760,11 @@ def main():
         "-d",
         dest="write_dictionary",
         help="file to write mcu protocol dictionary",
+    )
+    opts.add_option(
+        "-k",
+        dest="kconfig",
+        help="file containing the minimal (savedefconfig) build configuration",
     )
     opts.add_option(
         "-t",

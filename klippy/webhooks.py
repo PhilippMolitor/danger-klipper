@@ -3,10 +3,19 @@
 # Copyright (C) 2020 Eric Callahan <arksine.code@gmail.com>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license
-import logging, socket, os, sys, errno, json, collections, pwd, grp
+import collections
+import errno
+import grp
+import json
+import logging
+import os
+import pwd
+import socket
+import sys
+
 import numpy
-from . import gcode
-from . import APP_NAME
+
+from . import APP_NAME, gcode
 from .extras.danger_options import get_danger_options
 
 REQUEST_LOG_SIZE = 20
@@ -143,7 +152,9 @@ class ServerSocket:
         printer.register_event_handler(
             "klippy:disconnect", self._handle_disconnect
         )
-        printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
+        printer.register_event_handler(
+            "klippy:analyze_shutdown", self._handle_analyze_shutdown
+        )
 
     def _handle_accept(self, eventtime):
         try:
@@ -164,7 +175,7 @@ class ServerSocket:
             except socket.error:
                 pass
 
-    def _handle_shutdown(self):
+    def _handle_analyze_shutdown(self, msg, details):
         for client in self.clients.values():
             client.dump_request_log()
 
