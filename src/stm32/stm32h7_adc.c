@@ -153,7 +153,8 @@ static const uint8_t adc_pins[] = {
     GPIO('B', 1),
     ADC_TEMPERATURE_PIN,    // temp
     ADC_INVALID_PIN,        // vbat
-#elif CONFIG_MACH_STM32H5
+#elif CONFIG_MACH_STM32H503
+    // DS14053: one ADC. IN2 is VBAT/4, IN6 is VDDCORE.
     GPIO('A', 0), // 0
     GPIO('A', 1), // 1
     ADC_INVALID_PIN, // vbat/4
@@ -170,8 +171,51 @@ static const uint8_t adc_pins[] = {
     GPIO('C', 3), // 13
     GPIO('A', 2), // 14
     GPIO('A', 3), // 15
-    ADC_TEMPERATURE_PIN, // "vsense", temp?
+    ADC_TEMPERATURE_PIN, // vsense
     ADC_INVALID_PIN, // vrefint
+    GPIO('A', 4), // 18
+    GPIO('A', 5), // 19
+#elif CONFIG_MACH_STM32H562
+    // ADC1. IN16/IN17 are internal and not bonded to a pin.
+    GPIO('A', 0), // 0
+    GPIO('A', 1), // 1
+    GPIO('F', 11), // 2
+    GPIO('A', 6), // 3
+    GPIO('C', 4), // 4
+    GPIO('B', 1), // 5
+    GPIO('F', 12), // 6
+    GPIO('A', 7), // 7
+    GPIO('C', 5), // 8
+    GPIO('B', 0), // 9
+    GPIO('C', 0), // 10
+    GPIO('C', 1), // 11
+    GPIO('C', 2), // 12
+    GPIO('C', 3), // 13
+    GPIO('A', 2), // 14
+    GPIO('A', 3), // 15
+    ADC_TEMPERATURE_PIN, // 16, VSENSE
+    ADC_INVALID_PIN, // 17
+    GPIO('A', 4), // 18
+    GPIO('A', 5), // 19
+    // ADC2
+    GPIO('A', 0), // 0
+    GPIO('A', 1), // 1
+    GPIO('F', 13), // 2
+    GPIO('A', 6), // 3
+    GPIO('C', 4), // 4
+    GPIO('B', 1), // 5
+    GPIO('F', 14), // 6
+    GPIO('A', 7), // 7
+    GPIO('C', 5), // 8
+    GPIO('B', 0), // 9
+    GPIO('C', 0), // 10
+    GPIO('C', 1), // 11
+    GPIO('C', 2), // 12
+    GPIO('C', 3), // 13
+    GPIO('A', 2), // 14
+    GPIO('A', 3), // 15
+    ADC_INVALID_PIN, // 16
+    ADC_INVALID_PIN, // 17
     GPIO('A', 4), // 18
     GPIO('A', 5), // 19
 #endif
@@ -186,6 +230,7 @@ static const uint8_t adc_pins[] = {
 // 520Mhz stm32h723 adc3: clock=65Mhz, Tsamp=640.5, Tconv=653, total=10.05us
 // 80Mhz stm32l4: clock=20Mhz, Tsamp=247.5, Tconv=260, total=13.0us
 // 170Mhz stm32g4: clock=42.5Mhz, Tsamp=247.5, Tconv=260, total=6.118us
+// 250Mhz stm32h5: CKMODE 11 = HCLK/4 = 62.5Mhz, under the 75MHz fADC max
 
 // Handle register name differences between chips
 #if CONFIG_MACH_STM32H723

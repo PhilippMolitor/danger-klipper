@@ -24,7 +24,6 @@
 #define FREQ_PERIPH (CONFIG_CLOCK_FREQ / FREQ_PERIPH_DIV)
 
 #define FREQ_HSI_DEFAULT 64000000
-#define FREQ_USB_REQUIRED 48000000
 
 // Map a peripheral address to its enable bits
 struct cline
@@ -54,16 +53,36 @@ lookup_clock_line(uint32_t periph_base)
                               .bit = 1 << pos};
 
     } else if (periph_base < APB3PERIPH_BASE_NS) {
-        uint32_t pos = (periph_base - AHB2PERIPH_BASE_NS) / 0x400;
+        // ADC1/ADC2 and ADC12_COMMON sit above GPIO, but they share
+        // RCC_AHB2ENR_ADCEN (bit 10). Address/0x400 is past bit 31.
+        uint32_t bit = RCC_AHB2ENR_ADCEN;
+        if (periph_base != ADC1_BASE && periph_base != ADC12_COMMON_BASE
+#ifdef ADC2
+            && periph_base != ADC2_BASE
+#endif
+            ) {
+            uint32_t pos = (periph_base - AHB2PERIPH_BASE_NS) / 0x400;
+            bit = 1 << pos;
+        }
         return (struct cline){.en = &RCC->AHB2ENR,
                               .rst = &RCC->AHB2RSTR,
-                              .bit = 1 << pos};
+                              .bit = bit};
 
     } else {
-        uint32_t pos = (periph_base - APB3PERIPH_BASE_NS) / 0x400;
+        // APB3 enable bits are not spaced by 0x400. I2C3 is bit 7.
+        uint32_t bit;
+#ifdef I2C3
+        if (periph_base == I2C3_BASE)
+            bit = RCC_APB3ENR_I2C3EN;
+        else
+#endif
+        {
+            uint32_t pos = (periph_base - APB3PERIPH_BASE_NS) / 0x400;
+            bit = 1 << pos;
+        }
         return (struct cline){.en = &RCC->APB3ENR,
                               .rst = &RCC->APB3RSTR,
-                              .bit = 1 << pos};
+                              .bit = bit};
     }
     // TODO: h562 has an AHB4
 }
@@ -103,61 +122,77 @@ clock_setup(void)
                        ((CONFIG_CLOCK_FREQ>84000000) ? FLASH_ACR_WRHIGHFREQ_0 :
                                                     0));
     FLASH->ACR = (latency | FLASH_ACR_PRFTEN | wrhf);
+    // RM0492: read the latency back before raising the clock
+    while ((FLASH->ACR & (FLASH_ACR_LATENCY_Msk | FLASH_ACR_WRHIGHFREQ_Msk))
+           != (latency | wrhf))
+        ;
 
-    PWR->VOSCR = PWR_VOSCR_VOS_Msk; // set vreg to vosc0 for max freq
+    PWR->VOSCR = PWR_VOSCR_VOS_Msk; // VOS[1:0] = 0b11, scale 0
     while (!(PWR->VOSSR & PWR_VOSSR_VOSRDY))
         ;
 
     RCC->CFGR2 = 0;
     RCC->CR &= ~(RCC_CR_PLL1ON | RCC_CR_PLL2ON);
+    // PLL1CFGR and PLL1DIVR take a write only when PLL1RDY is also 0.
+    while (RCC->CR & (RCC_CR_PLL1RDY | RCC_CR_PLL2RDY))
+        ;
 
+    // PLL1 VCO is 2x SYSCLK (P divider is even-only, minimum 2).
+    // 500 MHz is inside the wide VCO range (128-560 MHz, VCOSEL = 0).
     uint32_t pll_base = 4000000, pll_freq = CONFIG_CLOCK_FREQ * 2, pllcfgr, div;
+    // 25 MHz does not divide by 4 MHz. A 5 MHz reference stays in the
+    // 4-8 MHz range and keeps the VCO at 2x SYSCLK.
+    if (!CONFIG_STM32_CLOCK_REF_INTERNAL && (CONFIG_CLOCK_REF_FREQ % pll_base)
+        && !(CONFIG_CLOCK_REF_FREQ % 5000000) && !(pll_freq % 5000000))
+        pll_base = 5000000;
     if (CONFIG_STM32_CLOCK_REF_INTERNAL) {
-        // Configure 500Mhz PLL from internal 32Mhz oscillator (HSI)
+        // HSI is 64 MHz. M = 16 gives a 4 MHz reference (RGE = 4-8 MHz).
         div = FREQ_HSI_DEFAULT / pll_base;
-        pllcfgr = RCC_PLL1CFGR_PLL1SRC_0 | RCC_PLL1CFGR_PLL1PEN // HSI
-	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz
+        pllcfgr = RCC_PLL1CFGR_PLL1SRC_0 | RCC_PLL1CFGR_PLL1PEN
+	            | RCC_PLL1CFGR_PLL1QEN | RCC_PLL1CFGR_PLL1RGE_1
+                    | (div << RCC_PLL1CFGR_PLL1M_Pos);
         RCC->CR |= RCC_CR_HSION;
         while (!(RCC->CR & RCC_CR_HSIRDY))
             ;
     } else {
-        // Configure 500Mhz PLL from external crystal (HSE)
         div = CONFIG_CLOCK_REF_FREQ / pll_base;
         RCC->CR |= RCC_CR_HSEON;
         while (!(RCC->CR & RCC_CR_HSERDY))
             ;
-        pllcfgr = RCC_PLL1CFGR_PLL1SRC | RCC_PLL1CFGR_PLL1PEN // HSE
-	            | RCC_PLL1CFGR_PLL1RGE_1 | (div << RCC_PLL1CFGR_PLL1M_Pos); // 4-8mhz
+        pllcfgr = RCC_PLL1CFGR_PLL1SRC | RCC_PLL1CFGR_PLL1PEN
+	            | RCC_PLL1CFGR_PLL1QEN | RCC_PLL1CFGR_PLL1RGE_1
+                    | (div << RCC_PLL1CFGR_PLL1M_Pos);
     }
     RCC->PLL1CFGR = pllcfgr;
+    // P = Q = 2, so pll1_p_ck and pll1_q_ck are both SYSCLK (250 MHz).
     RCC->PLL1DIVR = ((pll_freq/pll_base - 1) << RCC_PLL1DIVR_PLL1N_Pos)
-	            | RCC_PLL1DIVR_PLL1R_0 | RCC_PLL1DIVR_PLL1Q_0 | RCC_PLL1DIVR_PLL1P_0;
+	            | RCC_PLL1DIVR_PLL1R_0 | RCC_PLL1DIVR_PLL1Q_0
+                    | RCC_PLL1DIVR_PLL1P_0;
 
-    if (CONFIG_USBSERIAL) {
-        if (CONFIG_STM32_CLOCK_REF_INTERNAL) { // must use clock recovery
-            RCC->CR |= RCC_CR_HSI48ON;
-            while (!(RCC->CR & RCC_CR_HSI48RDY))
-                ;
-            enable_pclock(CRS_BASE);
-            CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
-	    RCC->CCIPR4 |= RCC_CCIPR4_USBSEL; // hsi48
-	} else { // use pll2
-	    pll_base = 1000000; pll_freq = FREQ_USB_REQUIRED * 2;
-	    div = CONFIG_CLOCK_REF_FREQ / pll_base;
-            RCC->PLL2CFGR = RCC_PLL2CFGR_PLL2SRC | RCC_PLL2CFGR_PLL2QEN // HSE
-	            | RCC_PLL2CFGR_PLL2VCOSEL | (div << RCC_PLL2CFGR_PLL2M_Pos); // 1-2mhz
-            RCC->PLL2DIVR = ((pll_freq/pll_base - 1) << RCC_PLL2DIVR_PLL2N_Pos)
-	            | RCC_PLL2DIVR_PLL2R_0 | RCC_PLL2DIVR_PLL2Q_0 | RCC_PLL2DIVR_PLL2P_0;
-            RCC->CR |= RCC_CR_PLL2ON;
-            while (!(RCC->CR & RCC_CR_PLL2RDY))
-                ;
-	    RCC->CCIPR4 |= RCC_CCIPR4_USBSEL_1; // pll2q
-	}
+    if (CONFIG_USB) {
+        // HSI48 + CRS. A 48 MHz PLL2 VCO is below the 128 MHz minimum.
+        RCC->CR |= RCC_CR_HSI48ON;
+        while (!(RCC->CR & RCC_CR_HSI48RDY))
+            ;
+        enable_pclock(CRS_BASE);
+        CRS->CR |= CRS_CR_AUTOTRIMEN | CRS_CR_CEN;
+        RCC->CCIPR4 = (RCC->CCIPR4 & ~RCC_CCIPR4_USBSEL) | RCC_CCIPR4_USBSEL;
     }
 
     RCC->CR |= RCC_CR_PLL1ON;
     while (!(RCC->CR & RCC_CR_PLL1RDY))
         ;
+
+    // FDCAN reset source is HSE. SPI reset source is pll1_q_ck.
+    RCC->CCIPR5 = (RCC->CCIPR5 & ~RCC_CCIPR5_FDCANSEL) | RCC_CCIPR5_FDCANSEL_0;
+    // I2C kernel clock is HSI (64 MHz). PCLK1 is 250 MHz and does not fit PRESC.
+    uint32_t i2csel = RCC_CCIPR4_I2C1SEL_1 | RCC_CCIPR4_I2C2SEL_1;
+    uint32_t i2cmask = RCC_CCIPR4_I2C1SEL | RCC_CCIPR4_I2C2SEL;
+#ifdef RCC_CCIPR4_I2C3SEL_1
+    i2csel |= RCC_CCIPR4_I2C3SEL_1;
+    i2cmask |= RCC_CCIPR4_I2C3SEL;
+#endif
+    RCC->CCIPR4 = (RCC->CCIPR4 & ~i2cmask) | i2csel;
 
     // Switch system clock to PLL
     RCC->CFGR1 |= RCC_CFGR1_SW;
@@ -236,7 +271,8 @@ armcm_main(void)
     SystemInit();
 
     configure_mpu();
-    enable_pclock(ICACHE_BASE);
+    // ICACHE has no bit in RCC_AHB1ENR. Its base is 0x10400 above
+    // AHB1, so enable_pclock() would shift by 65.
     ICACHE->CR |= ICACHE_CR_EN;
 
     SCB->VTOR = (uint32_t)VectorTable;

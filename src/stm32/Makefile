@@ -67,13 +67,13 @@ adc-src-$(CONFIG_MACH_STM32F0) := stm32/stm32f0_adc.c
 adc-src-$(CONFIG_MACH_N32G45x) := ../lib/n32g45x/n32g45x_adc.c stm32/n32g45x_adc.c
 adc-src-$(CONFIG_MACH_STM32G0) := stm32/stm32f0_adc.c
 adc-src-$(CONFIG_MACH_STM32G4) := stm32/stm32h7_adc.c
-adc-src-$(CONFIG_MACH_STM32H5) += stm32/stm32h7_adc.c
+adc-src-$(CONFIG_MACH_STM32H5) := stm32/stm32h7_adc.c
 adc-src-$(CONFIG_MACH_STM32H7) := stm32/stm32h7_adc.c
 adc-src-$(CONFIG_MACH_STM32L4) := stm32/stm32h7_adc.c
 src-$(CONFIG_WANT_ADC) += $(adc-src-y)
 
 spi-src-y := stm32/spi.c
-spi-src-$(CONFIG_MACH_STM32H5) := stm32/stm32h7_spi.c # STM32H5 SPI same as H7?
+spi-src-$(CONFIG_MACH_STM32H5) := stm32/stm32h7_spi.c
 spi-src-$(CONFIG_MACH_STM32H7) := stm32/stm32h7_spi.c
 src-$(CONFIG_WANT_GPIO_SPI) += $(spi-src-y)
 
@@ -82,7 +82,6 @@ i2c-src-$(CONFIG_MACH_STM32F1) := stm32/i2c.c
 i2c-src-$(CONFIG_MACH_STM32F2) := stm32/i2c.c
 i2c-src-$(CONFIG_MACH_STM32F4) := stm32/i2c.c
 
-src-$(CONFIG_MACH_STM32H5) += stm32/stm32f0_i2c.c
 src-$(CONFIG_WANT_GPIO_I2C) += $(i2c-src-y)
 
 serial-src-y := stm32/serial.c
